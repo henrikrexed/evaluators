@@ -14,10 +14,14 @@ def _extract_tokens(inv) -> dict | None:
     if not isinstance(perf, dict):
         return None
 
-    input_t = perf.get("input_tokens") or perf.get("prompt_tokens")
-    output_t = perf.get("output_tokens") or perf.get("completion_tokens")
+    input_t = perf.get("input_tokens")
+    if input_t is None:
+        input_t = perf.get("prompt_tokens")
+    output_t = perf.get("output_tokens")
+    if output_t is None:
+        output_t = perf.get("completion_tokens")
     if input_t is not None or output_t is not None:
-        return {"input_tokens": int(input_t or 0), "output_tokens": int(output_t or 0)}
+        return {"input_tokens": int(input_t if input_t is not None else 0), "output_tokens": int(output_t if output_t is not None else 0)}
 
     return None
 
@@ -56,7 +60,7 @@ def token_efficiency(input: EvalInput) -> EvalResult:
         )
 
     overall = sum(scores) / len(scores) if scores else 0.0
-    return EvalResult(score=overall, per_invocation_scores=scores, details={"token_details": details_items})
+    return EvalResult(score=overall, per_invocation_scores=scores, details={"issues": details_items})
 
 
 if __name__ == "__main__":

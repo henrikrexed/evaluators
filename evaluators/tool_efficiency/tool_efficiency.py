@@ -8,23 +8,20 @@ Config: max_tool_calls (int, default 15), min_tool_calls (int, default 0),
 """
 
 import json
-from agentevals_evaluator_sdk import EvalInput, EvalResult, evaluator
+from agentevals_evaluator_sdk import EvalInput, EvalResult, EvalStatus, evaluator
 
 
 def _call_signature(call) -> str:
-    name = call.get("name", "") if isinstance(call, dict) else getattr(call, "name", "")
-    args = call.get("args", {}) if isinstance(call, dict) else getattr(call, "args", {})
     try:
-        args_str = json.dumps(args, sort_keys=True, default=str)
+        args_str = json.dumps(call.args, sort_keys=True, default=str)
     except (TypeError, ValueError):
-        args_str = str(args)
-    return f"{name}::{args_str}"
+        args_str = str(call.args)
+    return f"{call.name}::{args_str}"
 
 
 def _is_error_response(response) -> bool:
     """Check if a tool response indicates an error via its status field."""
-    status = response.get("status", "") if isinstance(response, dict) else getattr(response, "status", "")
-    return str(status).lower() in ("error", "failed", "failure")
+    return str(response.status or "").lower() in ("error", "failed", "failure")
 
 
 @evaluator
@@ -63,7 +60,7 @@ def tool_efficiency(input: EvalInput) -> EvalResult:
         useful = max(0, total - dupes - errors)
 
         efficiency = useful / total
-        budget_factor = max(0.0, 1.0 - max(0, total - max_tool_calls) / max_tool_calls)
+        budget_factor = max(0.0, 1.0 - max(0, total - max_tool_calls) / max_tool_calls) if max_tool_calls > 0 else 0.0
         score = max(0.0, min(1.0, efficiency * budget_factor))
         scores.append(score)
 
@@ -72,8 +69,15 @@ def tool_efficiency(input: EvalInput) -> EvalResult:
         if errors: parts.append(f"errors={errors}")
         details_items.append(f"{inv.invocation_id}: {', '.join(parts)}")
 
-    overall = sum(scores) / len(scores) if scores else 0.0
-    return EvalResult(score=overall, per_invocation_scores=scores, details={"tool_details": details_items})
+    if not scores:
+        return EvalResult(
+            score=0.0,
+            status=EvalStatus.NOT_EVALUATED,
+            details={"reason": "no invocations to evaluate"},
+        )
+
+    overall = sum(scores) / len(scores)
+    return EvalResult(score=overall, per_invocation_scores=scores, details={"issues": details_items})
 
 
 if __name__ == "__main__":

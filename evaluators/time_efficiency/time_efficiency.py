@@ -14,7 +14,9 @@ def _extract_duration(inv) -> float | None:
     if not isinstance(perf, dict):
         return None
 
-    d = perf.get("duration_s") or perf.get("duration")
+    d = perf.get("duration_s")
+    if d is None:
+        d = perf.get("duration")
     if d is not None:
         return float(d)
     return None
@@ -36,7 +38,10 @@ def time_efficiency(input: EvalInput) -> EvalResult:
             continue
 
         has_data = True
-        score = max(0.0, min(1.0, 1.0 - (duration / max_duration)))
+        if max_duration <= 0:
+            score = 0.0
+        else:
+            score = max(0.0, min(1.0, 1.0 - (duration / max_duration)))
         scores.append(score)
         details_items.append(f"{inv.invocation_id}: {duration:.1f}s / {max_duration:.1f}s")
 
@@ -48,7 +53,7 @@ def time_efficiency(input: EvalInput) -> EvalResult:
         )
 
     overall = sum(scores) / len(scores) if scores else 0.0
-    return EvalResult(score=overall, per_invocation_scores=scores, details={"time_details": details_items})
+    return EvalResult(score=overall, per_invocation_scores=scores, details={"issues": details_items})
 
 
 if __name__ == "__main__":
